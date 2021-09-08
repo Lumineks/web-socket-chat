@@ -3,23 +3,123 @@ const express = require("express");
 const WebSocket = require("ws");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const NodeCache = require("node-cache");
 const loginResponse = require("./utils/loginResponse");
 
 const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 5000;
 const { Op } = require("sequelize");
-// const webSocketServer = new WebSocket({ server });
+const webSocketServer = new WebSocket.Server({ server });
 
-// webSocketServer.on("connection", (ws) => {
-//   ws.on("message", (m) => {
-//     webSocketServer.clients.forEach((client) => client.send(m));
-//   });
+const usersOnline = new NodeCache();
 
-//   ws.on("error", (e) => ws.send(e));
+webSocketServer.on("connection", (ws) => {
+  ws.on("message", async (data) => {
+    const parsedData = JSON.parse(data);
+    const { event, token } = parsedData;
+    let decodedToken;
+    let user;
 
-//   ws.send("Hi there, I am a WebSocket server");
-// });
+    if (!token) {
+      ws.close();
+    }
+
+    try {
+      decodedToken = jwt.verify(token, "secret");
+      user = await models.User.findByPk(decodedToken.userId);
+    } catch (err) {
+      console.log(err);
+      ws.send("invalid token");
+    }
+
+    console.log(user);
+
+    switch (event) {
+      case "message": {
+        console.log("value check", user.admin);
+        break;
+      }
+      case "getAllUsers": {
+        if (user.admin) {
+          console.log("got admin user");
+          const usersFromDb = await models.User.findAll();
+          // const usersFromDb = dataFromdb.map((user) => {
+          //   return { ...user.dataValues };
+          // });
+
+          const usersToSend = usersFromDb.map((user) => {
+            return {
+              name: user.username,
+              email: user.email,
+              isMuted: user.muted,
+              isBanned: user.banned,
+            };
+          });
+
+          ws.send(JSON.stringify(usersToSend));
+        } else {
+        }
+        break;
+      }
+      case "login": {
+        usersOnline.set(user.id, user);
+
+        // const usersFromCache = usersOnline.mget(usersOnline.keys());
+        const usersToSend = [];
+        for (key of usersOnline.keys()) {
+          const user = usersOnline.get(key);
+          usersToSend.push({
+            name: user.username,
+            email: user.email,
+            isMuted: user.muted,
+            isBanned: user.banned,
+          });
+        }
+
+        webSocketServer.clients.forEach((client) =>
+          client.send(
+            JSON.stringify({ event: "usersOnline", users: usersToSend })
+          )
+        );
+
+        break;
+      }
+      case "logout": {
+        console.log("logout event");
+        usersOnline.take(user.id);
+        const usersToSend = [];
+        for (key of usersOnline.keys()) {
+          const user = usersOnline.get(key);
+          usersToSend.push({
+            name: user.username,
+            email: user.email,
+            isMuted: user.muted,
+          });
+        }
+
+        webSocketServer.clients.forEach((client) =>
+          client.send(
+            JSON.stringify({ event: "usersOnline", users: usersToSend })
+          )
+        );
+        break;
+      }
+      default:
+        ws.close();
+        break;
+    }
+  });
+
+  ws.on("error", (e) => ws.send(e));
+
+  ws.on("close", () => {
+    // За
+    console.log("closed connection");
+  });
+
+  console.log("connected");
+});
 
 const models = require("./models/index");
 
@@ -54,24 +154,29 @@ app.post("/login", async (req, res) => {
       res.status(400).send("All input is required");
     }
 
+    for (key of usersOnline.keys()) {
+      if(usersOnline.get(key).username === username ) {
+        return res.status(400).send("Already in chat");
+      }
+    }
+
     const existingUser = await models.User.findOne({
       where: {
         [Op.or]: [{ email: email }, { username: username }],
       },
     });
 
-
     if (existingUser) {
       console.log("user exists");
 
       console.log(await bcrypt.compare(password, existingUser.password));
-      if(await bcrypt.compare(password, existingUser.password)) {
+      if (await bcrypt.compare(password, existingUser.password)) {
         const token = jwt.sign({ userId: existingUser.id, email }, "secret", {
           expiresIn: "1h",
         });
-  
+
         res.status(200).json(loginResponse(existingUser.dataValues, token));
-      }else {
+      } else {
         res.status(401).send("Invalid password");
       }
     } else {
@@ -85,7 +190,7 @@ app.post("/login", async (req, res) => {
         admin: false,
         muted: false,
       });
-      const token = jwt.sign({ userId: user.id, email }, "secret", {
+      const token = jwt.sign({ userId: user.id }, "secret", {
         expiresIn: "1h",
       });
       res.status(200).json(loginResponse(user.dataValues, token));
@@ -99,10 +204,4 @@ app.use("/", (req, res) => {
   res.render("404");
 });
 
-server.listen(port);
-// const connection = require('./utils/db');
-
-// connection.connect(error=>{
-//   if(error) console.log(error);
-//   else console.log('success');
-// })
+server.listen(port, () => console.log(`Server is listening on port: ${port}`));

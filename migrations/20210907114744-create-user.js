@@ -1,4 +1,5 @@
 'use strict';
+const bcrypt = require('bcrypt');
 module.exports = {
   up: async (queryInterface, Sequelize) => {
     await queryInterface.createTable('Users', {
@@ -33,6 +34,16 @@ module.exports = {
         allowNull: false,
       },
     });
+    
+    return queryInterface.bulkInsert('Users', [{
+      username: 'root',
+      password: await bcrypt.hash('root', 10),
+      email: 'root@root',
+      banned: false,
+      admin: true,
+      muted: false,
+    }]);
+    // queryInterface
   },
   down: async (queryInterface, Sequelize) => {
     await queryInterface.dropTable('Users');
