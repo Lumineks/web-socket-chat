@@ -3,7 +3,6 @@ const express = require("express");
 const WebSocket = require("ws");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const NodeCache = require("node-cache");
 const loginResponse = require("./utils/loginResponse");
 
 const app = express();
@@ -12,7 +11,34 @@ const port = process.env.PORT || 5000;
 const { Op } = require("sequelize");
 const webSocketServer = new WebSocket.Server({ server });
 
-const usersOnline = new NodeCache();
+const usersOnline = [];
+
+const mapOnlineUsers = () => {
+  const mappedUsers = [];
+  for (user of usersOnline) {
+    mappedUsers.push({
+      name: user.username,
+      email: user.email,
+      isMuted: user.muted,
+      isBanned: user.banned,
+    });
+  }
+
+  return mappedUsers;
+};
+
+const mapAllUsers = async () => {
+  let usersFromDb = await models.User.findAll();
+
+  return usersFromDb.map((user) => {
+    return {
+      name: user.username,
+      email: user.email,
+      isMuted: user.muted,
+      isBanned: user.banned,
+    };
+  });
+};
 
 webSocketServer.on("connection", (ws) => {
   ws.on("message", async (data) => {
@@ -42,61 +68,43 @@ webSocketServer.on("connection", (ws) => {
       }
       case "getAllUsers": {
         if (user.admin) {
-          console.log("got admin user");
-          const usersFromDb = await models.User.findAll();
-          // const usersFromDb = dataFromdb.map((user) => {
-          //   return { ...user.dataValues };
-          // });
+          console.log("get all users");
 
-          const usersToSend = usersFromDb.map((user) => {
-            return {
-              name: user.username,
-              email: user.email,
-              isMuted: user.muted,
-              isBanned: user.banned,
-            };
-          });
-
-          ws.send(JSON.stringify(usersToSend));
+          // ws.send(JSON.stringify(usersToSend));
         } else {
         }
         break;
       }
       case "login": {
-        usersOnline.set(user.id, user);
-
+        console.log("inlogin");
+        usersOnline.push({ ...user.dataValues, wsc: ws });
+        console.log("usersOnline: ", usersOnline);
         // const usersFromCache = usersOnline.mget(usersOnline.keys());
-        const usersToSend = [];
-        for (key of usersOnline.keys()) {
-          const user = usersOnline.get(key);
-          usersToSend.push({
-            name: user.username,
-            email: user.email,
-            isMuted: user.muted,
-            isBanned: user.banned,
-          });
-        }
+        const usersToSend = mapOnlineUsers();
 
         webSocketServer.clients.forEach((client) =>
           client.send(
             JSON.stringify({ event: "usersOnline", users: usersToSend })
           )
         );
+
+        const onlineRootUser = usersOnline.find((u) => u.id === user.id);
+        if (onlineRootUser) {
+          const usersToSend = await mapAllUsers();
+
+          onlineRootUser.wsc.send(
+            JSON.stringify({ event: "allUsers", users: usersToSend })
+          );
+        }
 
         break;
       }
       case "logout": {
         console.log("logout event");
-        usersOnline.take(user.id);
-        const usersToSend = [];
-        for (key of usersOnline.keys()) {
-          const user = usersOnline.get(key);
-          usersToSend.push({
-            name: user.username,
-            email: user.email,
-            isMuted: user.muted,
-          });
-        }
+        const userIdx = usersOnline.findIndex((u) => u.id === user.id);
+        usersOnline.splice(userIdx, 1);
+
+        const usersToSend = mapOnlineUsers();
 
         webSocketServer.clients.forEach((client) =>
           client.send(
@@ -105,6 +113,77 @@ webSocketServer.on("connection", (ws) => {
         );
         break;
       }
+      case "toggleMute": {
+        const { userToMuteName, isMuted } = parsedData;
+        const userToToggle = await models.User.findOne({
+          where: { username: userToMuteName },
+        });
+        // console.log(userToMute);
+
+        userToToggle.muted = isMuted;
+        await userToToggle.save();
+
+        const onlineMutedUser = usersOnline.find(
+          (u) => u.id === userToToggle.id
+        );
+        if (onlineMutedUser) {
+          onlineMutedUser.muted = isMuted;
+          onlineMutedUser.wsc.send(
+            JSON.stringify({ event: "muteToggled", isMuted })
+          );
+        }
+
+        const onlineRootUser = usersOnline.find((u) => u.id === user.id);
+        if (onlineRootUser) {
+          let usersToSend = mapOnlineUsers();
+
+          onlineRootUser.wsc.send(
+            JSON.stringify({ event: "usersOnline", users: usersToSend })
+          );
+
+          usersToSend = await mapAllUsers();
+          onlineRootUser.wsc.send(
+            JSON.stringify({ event: "allUsers", users: usersToSend })
+          );
+        }
+
+        break;
+      }
+      case "toggleBan": {
+        const { userToBanName, isBanned } = parsedData;
+        let userToToggle;
+        try {
+          userToToggle = await models.User.findOne({
+            where: { username: userToBanName },
+          });
+        } catch (error) {
+          console.log(error);
+        }
+        console.log("found user to ban", isBanned);
+        userToToggle.banned = isBanned;
+        await userToToggle.save();
+
+        const onlineUser = usersOnline.find((u) => u.id === userToToggle.id);
+        if (isBanned && onlineUser) {
+          const bannedUserIdx = usersOnline.findIndex(
+            (u) => u.id === onlineUser.id
+          );
+          usersOnline.splice(bannedUserIdx, 1);
+          onlineUser.wsc.send(JSON.stringify({ event: "banned", isMuted }));
+        }
+
+        const onlineRootUser = usersOnline.find((u) => u.id === user.id);
+        if (onlineRootUser) {
+          const usersToSend = await mapAllUsers();
+
+          onlineRootUser.wsc.send(
+            JSON.stringify({ event: "allUsers", users: usersToSend })
+          );
+        }
+
+        break;
+      }
+
       default:
         ws.close();
         break;
@@ -154,8 +233,8 @@ app.post("/login", async (req, res) => {
       res.status(400).send("All input is required");
     }
 
-    for (key of usersOnline.keys()) {
-      if(usersOnline.get(key).username === username ) {
+    for (user of usersOnline) {
+      if (user.username === username) {
         return res.status(400).send("Already in chat");
       }
     }
@@ -167,9 +246,10 @@ app.post("/login", async (req, res) => {
     });
 
     if (existingUser) {
-      console.log("user exists");
+      if (existingUser.banned) {
+        res.status(403).send("Вы были забанены");
+      }
 
-      console.log(await bcrypt.compare(password, existingUser.password));
       if (await bcrypt.compare(password, existingUser.password)) {
         const token = jwt.sign({ userId: existingUser.id, email }, "secret", {
           expiresIn: "1h",
@@ -177,7 +257,7 @@ app.post("/login", async (req, res) => {
 
         res.status(200).json(loginResponse(existingUser.dataValues, token));
       } else {
-        res.status(401).send("Invalid password");
+        res.status(401).send("Неправильный пароль, имя или email");
       }
     } else {
       const encryptedPassword = await bcrypt.hash(password, 10);
