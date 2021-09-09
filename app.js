@@ -8,7 +8,7 @@ const loginResponse = require("./utils/loginResponse");
 const app = express();
 const server = http.createServer(app);
 const port = process.env.PORT || 5000;
-const { Op } = require("sequelize");
+const { Op, json } = require("sequelize");
 const webSocketServer = new WebSocket.Server({ server });
 
 const usersOnline = [];
@@ -59,11 +59,28 @@ webSocketServer.on("connection", (ws) => {
       ws.send("invalid token");
     }
 
+    if (!user) {
+      return ws.close();
+    }
     console.log(user);
 
     switch (event) {
       case "message": {
-        console.log("value check", user.admin);
+        const message = {
+          text: parsedData.text,
+          date: parsedData.date,
+          name: user.username,
+        };
+
+        webSocketServer.clients.forEach((client) =>
+          client.send(
+            JSON.stringify({
+              event: "message",
+              message: message,
+            })
+          )
+        );
+
         break;
       }
       case "getAllUsers": {
@@ -88,8 +105,9 @@ webSocketServer.on("connection", (ws) => {
           )
         );
 
-        const onlineRootUser = usersOnline.find((u) => u.id === user.id);
+        const onlineRootUser = usersOnline.find((u) => u.username === "root");
         if (onlineRootUser) {
+          console.log("found root on sync");
           const usersToSend = await mapAllUsers();
 
           onlineRootUser.wsc.send(
@@ -111,6 +129,7 @@ webSocketServer.on("connection", (ws) => {
             JSON.stringify({ event: "usersOnline", users: usersToSend })
           )
         );
+
         break;
       }
       case "toggleMute": {
@@ -118,7 +137,6 @@ webSocketServer.on("connection", (ws) => {
         const userToToggle = await models.User.findOne({
           where: { username: userToMuteName },
         });
-        // console.log(userToMute);
 
         userToToggle.muted = isMuted;
         await userToToggle.save();
@@ -133,7 +151,7 @@ webSocketServer.on("connection", (ws) => {
           );
         }
 
-        const onlineRootUser = usersOnline.find((u) => u.id === user.id);
+        const onlineRootUser = usersOnline.find((u) => u.username === "root");
         if (onlineRootUser) {
           let usersToSend = mapOnlineUsers();
 
@@ -168,14 +186,20 @@ webSocketServer.on("connection", (ws) => {
           const bannedUserIdx = usersOnline.findIndex(
             (u) => u.id === onlineUser.id
           );
+          onlineUser.wsc.close();
           usersOnline.splice(bannedUserIdx, 1);
-          onlineUser.wsc.send(JSON.stringify({ event: "banned", isMuted }));
+          // onlineUser.wsc.send(JSON.stringify({ event: "banned", isMuted }));
         }
 
-        const onlineRootUser = usersOnline.find((u) => u.id === user.id);
+        const onlineRootUser = usersOnline.find((u) => u.username === "root");
         if (onlineRootUser) {
-          const usersToSend = await mapAllUsers();
+          let usersToSend = mapOnlineUsers();
 
+          onlineRootUser.wsc.send(
+            JSON.stringify({ event: "usersOnline", users: usersToSend })
+          );
+
+          usersToSend = await mapAllUsers();
           onlineRootUser.wsc.send(
             JSON.stringify({ event: "allUsers", users: usersToSend })
           );
@@ -192,9 +216,17 @@ webSocketServer.on("connection", (ws) => {
 
   ws.on("error", (e) => ws.send(e));
 
-  ws.on("close", () => {
+  ws.on("close", (statusCode) => {
     // За
-    console.log("closed connection");
+    if (statusCode === 1000 || statusCode === 1005) {
+      console.log("closed connection");
+    } else {
+      console.log("Lost connection");
+      usersOnline.splice(0, usersOnline.length);
+      webSocketServer.clients.forEach((client) =>
+        client.send(JSON.stringify({ event: "refreshOnlineUsers" }))
+      );
+    }
   });
 
   console.log("connected");
