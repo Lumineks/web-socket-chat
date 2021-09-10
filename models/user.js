@@ -13,8 +13,18 @@ module.exports = (sequelize, DataTypes) => {
   }
   User.init(
     {
-      username: DataTypes.STRING,
-      email: DataTypes.STRING,
+      username: {
+        type: DataTypes.STRING,
+        validate: {
+          len: [3, 36],
+        },
+      },
+      email: {
+        type: DataTypes.STRING,
+        validate: {
+          isEmail: true,
+        },
+      },
       admin: DataTypes.BOOLEAN,
       banned: DataTypes.BOOLEAN,
       muted: DataTypes.BOOLEAN,

@@ -4,6 +4,7 @@ const WebSocket = require("ws");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const loginResponse = require("./utils/loginResponse");
+const emailValidator = require("email-validator");
 
 const app = express();
 const server = http.createServer(app);
@@ -13,7 +14,7 @@ const webSocketServer = new WebSocket.Server({ server });
 
 const usersOnline = [];
 
-const mapOnlineUsers = () => {
+const mapOnlineUsers = () => { 
   const mappedUsers = [];
   for (user of usersOnline) {
     mappedUsers.push({
@@ -66,9 +67,12 @@ webSocketServer.on("connection", (ws) => {
 
     switch (event) {
       case "message": {
+        if(parsedData.text.length > 200) return;
+        
         const message = {
           text: parsedData.text,
           date: parsedData.date,
+          color: parsedData.color,
           name: user.username,
         };
 
@@ -83,20 +87,10 @@ webSocketServer.on("connection", (ws) => {
 
         break;
       }
-      case "getAllUsers": {
-        if (user.admin) {
-          console.log("get all users");
-
-          // ws.send(JSON.stringify(usersToSend));
-        } else {
-        }
-        break;
-      }
       case "login": {
         console.log("inlogin");
         usersOnline.push({ ...user.dataValues, wsc: ws });
         console.log("usersOnline: ", usersOnline);
-        // const usersFromCache = usersOnline.mget(usersOnline.keys());
         const usersToSend = mapOnlineUsers();
 
         webSocketServer.clients.forEach((client) =>
@@ -236,18 +230,18 @@ const models = require("./models/index");
 
 app.use(express.json());
 
-app.use(function (req, res, next) {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.setHeader(
-    "Access-Control-Allow-Methods",
-    "GET, POST, OPTIONS, PUT, PATCH, DELETE"
-  );
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept"
-  );
-  next();
-});
+// app.use(function (req, res, next) {
+//   res.header("Access-Control-Allow-Origin", "*");
+//   res.setHeader(
+//     "Access-Control-Allow-Methods",
+//     "GET, POST, OPTIONS, PUT, PATCH, DELETE"
+//   );
+//   res.header(
+//     "Access-Control-Allow-Headers",
+//     "Origin, X-Requested-With, Content-Type, Accept"
+//   );
+//   next();
+// });
 
 app.get("/chat", (req, res) => {
   res.render("chat");
@@ -262,12 +256,25 @@ app.post("/login", async (req, res) => {
     const { username, password, email } = req.body;
 
     if (!(username && password && email)) {
-      res.status(400).send("All input is required");
+      return res.status(400).send("Все поля обязательны для заполнения");
+    }
+
+    if(!emailValidator.validate(email) && email !== "root@root") {
+      return res.status(400).send("Некорректный email адрес");
+    }
+
+    // Special characters regexp
+    if(/[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(username)) {
+      return res.status(400).send("Имя пользователя не должно содержать спец символы ");
+    }
+
+    if(username.length < 3) {
+      return res.status(400).send("Имя пользователя должно состоять минимум из 3х символов");
     }
 
     for (user of usersOnline) {
       if (user.username === username) {
-        return res.status(400).send("Already in chat");
+        return res.status(400).send("Пользователь с таким именем уже в чате");
       }
     }
 
@@ -283,7 +290,7 @@ app.post("/login", async (req, res) => {
       }
 
       if (await bcrypt.compare(password, existingUser.password)) {
-        const token = jwt.sign({ userId: existingUser.id, email }, "secret", {
+        const token = jwt.sign({ userId: existingUser.id }, "secret", {
           expiresIn: "1h",
         });
 
