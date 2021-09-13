@@ -15,13 +15,11 @@ const mapAllUsers = require("./utils/mapAllUsers");
 
 webSocketServer.on("connection", (ws) => {
   ws.on("message", async (data) => {
-
     let parsedData;
 
     try {
       parsedData = JSON.parse(data);
-    }
-    catch(error) {
+    } catch (error) {
       console.log(error);
       return;
     }
@@ -83,7 +81,7 @@ webSocketServer.on("connection", (ws) => {
     }
 
     if (event === "message") {
-      if (parsedData.text.length > 200) return;
+      if (parsedData.text.length === 0 || parsedData.text.length > 200) return;
 
       const message = {
         text: parsedData.text,
@@ -107,7 +105,7 @@ webSocketServer.on("connection", (ws) => {
     if (event === "toggleMute") {
       const { userToMuteName, isMuted } = parsedData;
 
-      if(!user.admin) return;
+      if (!user.admin) return;
 
       try {
         await models.User.update(
@@ -150,7 +148,7 @@ webSocketServer.on("connection", (ws) => {
     if (event === "toggleBan") {
       const { userToBanName, isBanned } = parsedData;
 
-      if(!user.admin) return;
+      if (!user.admin) return;
 
       try {
         await models.User.update(
@@ -206,6 +204,8 @@ webSocketServer.on("connection", (ws) => {
 
   console.log("connected");
 });
+
+
 
 const auth = require("./middleware/auth");
 

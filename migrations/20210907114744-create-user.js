@@ -43,7 +43,6 @@ module.exports = {
       admin: true,
       muted: false,
     }]);
-    // queryInterface
   },
   down: async (queryInterface, Sequelize) => {
     await queryInterface.dropTable('Users');

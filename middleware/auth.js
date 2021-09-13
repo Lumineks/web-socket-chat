@@ -5,6 +5,7 @@ const emailValidator = require("email-validator");
 const { Op } = require("sequelize");
 const UsersOnline = require("../utils/UsersOnline");
 const models = require("../models/index");
+const checkSpecialCharacter = require("../utils/checkSpecialCharacter");
 
 const auth = async (req, res, next) => {
   try {
@@ -14,8 +15,7 @@ const auth = async (req, res, next) => {
       return res.status(400).send("Все поля обязательны для заполнения");
     }
 
-    // Special characters regexp
-    if (/[ `!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?~]/.test(username)) {
+    if (checkSpecialCharacter(username)) {
       return res
         .status(400)
         .send("Имя пользователя не должно содержать спец символы ");
@@ -26,14 +26,20 @@ const auth = async (req, res, next) => {
         .status(400)
         .send("Имя пользователя должно состоять минимум из 3х символов");
     }
-
-    if (UsersOnline.includes(username)) {
-      return res.status(400).send("Пользователь с таким именем уже в чате");
+    else if(password.length<4) {
+      return res
+      .status(400)
+      .send("пароль должен состоять минимум из 4х символов");
     }
 
     if (!emailValidator.validate(email) && email !== "root@root") {
       return res.status(400).send("Некорректный email адрес");
     }
+
+    if (UsersOnline.includes(username)) {
+      return res.status(403).send("Пользователь с таким именем уже в чате");
+    }
+
 
     const existingUser = await models.User.findOne({
       where: {
@@ -43,7 +49,7 @@ const auth = async (req, res, next) => {
 
     if (existingUser) {
       if (existingUser.banned) {
-        res.status(403).send("Вы были забанены");
+        return res.status(403).send("Вы были забанены");
       }
 
       if (await bcrypt.compare(password, existingUser.password)) {
