@@ -5,11 +5,11 @@ class UsersOnline {
     return usersOnline;
   }
 
-  static getRootUser() {
+  static getRoot() {
     return usersOnline.find((u) => u.username === "root");
   }
 
-  static getUserByName(username) {
+  static getByName(username) {
     return usersOnline.find((u) => u.username === username);
   }
 
@@ -17,16 +17,18 @@ class UsersOnline {
     return !!usersOnline.find((u) => u.username === username);
   }
 
-  static addUser(user) {
+  static add(user) {
     usersOnline.push(user);
   }
 
-  static removeUserById(id) {
+  static removeById(id) {
+    console.log("Before: ", usersOnline);
     const userIdx = usersOnline.findIndex((u) => u.id === id);
     usersOnline.splice(userIdx, 1);
+    console.log("After: ", usersOnline);
   }
 
-  static mapUsers() {
+  static map() {
     const mappedUsers = usersOnline.map((user) => {
       return {
         name: user.username,
@@ -37,10 +39,6 @@ class UsersOnline {
     });
 
     return mappedUsers;
-  }
-
-  static clear() {
-    usersOnline.splice(0, usersOnline.length);
   }
 }
 
