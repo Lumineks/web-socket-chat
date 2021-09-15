@@ -5,6 +5,8 @@ const jwt = require("jsonwebtoken");
 const UsersOnline = require("../service/UsersOnline");
 const Messages = require("../service/Messages");
 
+
+
 module.exports = (server) => {
   const webSocketServer = new WebSocket.Server({ server });
   const webSocketService = new WebSocketService(webSocketServer);
@@ -45,7 +47,10 @@ module.exports = (server) => {
       const { event } = parsedData;
 
       if (event === webSocketService.clientEvents.message) {
+        const onlineUser = UsersOnline.getByName(user.username);
 
+        if(onlineUser.muted) return;
+       
         if (
           parsedData.text.trim().length === 0 ||
           parsedData.text.trim().length > 200
@@ -104,10 +109,10 @@ module.exports = (server) => {
         
         if (isBanned && onlineUser) {
           onlineUser.wsc.close();
-        }
 
+          webSocketService.sendOnlineUsers("all");
+        }
         
-        webSocketService.sendOnlineUsers("all");
         webSocketService.sendAllUsersToAdmin();
 
         return;

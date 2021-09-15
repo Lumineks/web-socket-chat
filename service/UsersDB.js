@@ -1,4 +1,5 @@
 const models = require("../models/index");
+const { Op } = require("sequelize");
 
 class UsersService {
   static async mapAllUsers() {
@@ -11,6 +12,14 @@ class UsersService {
         isMuted: user.muted,
         isBanned: user.banned,
       };
+    });
+  }
+
+  static async findByLoginData(email, username) {
+    return await models.User.findOne({
+      where: {
+        [Op.or]: [{ email: email }, { username: username }],
+      },
     });
   }
 
@@ -28,6 +37,17 @@ class UsersService {
     } catch (e) {
       console.log("UpdateByName error: ", e);
     }
+  }
+
+  static async create(username, encryptedPassword, email) {
+    return await models.User.create({
+      username: username,
+      password: encryptedPassword,
+      email: email,
+      banned: false,
+      admin: false,
+      muted: false,
+    });
   }
 }
 
