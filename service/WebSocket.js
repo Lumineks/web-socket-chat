@@ -4,11 +4,19 @@ const UsersDBService = require("./UsersDB");
 class WebSocketService {
   constructor(WSServer) {
     this.WebSocketServer = WSServer;
-    this.events = {
+
+    this.serverEvents = {
       message: "message",
       usersOnline: "usersOnline",
       allUsers: "allUsers",
       muteToggled: "muteToggled",
+      msgDelay: "msgDelay",
+    };
+
+    this.clientEvents = {
+      message: "message",
+      toggleMute: "toggleMute",
+      toggleBan: "toggleBan",
     };
   }
 
@@ -19,7 +27,7 @@ class WebSocketService {
       const usersToSend = await UsersDBService.mapAllUsers();
 
       onlineRootUser.wsc.send(
-        this.stringifyDataToSend(this.events.allUsers, usersToSend)
+        this.stringifyDataToSend(this.serverEvents.allUsers, usersToSend)
       );
     }
   }
@@ -29,24 +37,30 @@ class WebSocketService {
 
     if (config === "all") {
       const dataToSend = this.stringifyDataToSend(
-        this.events.usersOnline,
+        this.serverEvents.usersOnline,
         usersToSend
       );
 
       this.sendDataToAllUsers(dataToSend);
+
     } else if (config === "admin") {
+
       const onlineRootUser = UsersOnline.getRoot();
 
       if (onlineRootUser) {
         onlineRootUser.wsc.send(
-          this.stringifyDataToSend(this.events.usersOnline, usersToSend)
+          this.stringifyDataToSend(this.serverEvents.usersOnline, usersToSend)
         );
       }
+
     }
   }
 
   sendMessage(message) {
-    const dataToSend = this.stringifyDataToSend(this.events.message, message);
+    const dataToSend = this.stringifyDataToSend(
+      this.serverEvents.message,
+      message
+    );
 
     this.sendDataToAllUsers(dataToSend);
   }
@@ -55,11 +69,25 @@ class WebSocketService {
     const onlineMutedUser = UsersOnline.getByName(username);
 
     if (onlineMutedUser) {
-      onlineMutedUser.muted = isMuted;
+
       onlineMutedUser.wsc.send(
-        this.stringifyDataToSend(this.events.muteToggled, isMuted)
+        this.stringifyDataToSend(
+          this.serverEvents.muteToggled,
+          onlineMutedUser.muted
+        )
       );
+      
     }
+  }
+
+  notifyMsgDelay(username) {
+    const onlineUser = UsersOnline.getByName(username);
+
+    const dataToSend = this.stringifyDataToSend(this.serverEvents.msgDelay, {
+      text: "Вы можете отправлять сообщение 1 раз в 15 секунд",
+    });
+
+    onlineUser.wsc.send(dataToSend);
   }
 
   // Helpers

@@ -3,6 +3,7 @@ const WebSocket = require("ws");
 const WebSocketService = require("../service/WebSocket");
 const jwt = require("jsonwebtoken");
 const UsersOnline = require("../service/UsersOnline");
+const Messages = require("../service/Messages");
 
 module.exports = (server) => {
   const webSocketServer = new WebSocket.Server({ server });
@@ -43,7 +44,8 @@ module.exports = (server) => {
 
       const { event } = parsedData;
 
-      if (event === "message") {
+      if (event === webSocketService.clientEvents.message) {
+
         if (
           parsedData.text.trim().length === 0 ||
           parsedData.text.trim().length > 200
@@ -51,7 +53,6 @@ module.exports = (server) => {
           return;
         }
 
-        // TODO Implement timer logic here
         const message = {
           text: parsedData.text,
           date: parsedData.date,
@@ -59,47 +60,48 @@ module.exports = (server) => {
           name: user.username,
         };
 
-        // webSocketService.
-        webSocketService.sendMessage(message);
+        if(Messages.checkDelay(message.name, message.date)) {
+
+          Messages.add(message);
+
+          webSocketService.sendMessage(message);
+          
+        }
+        else {
+          webSocketService.notifyMsgDelay(user.username);
+        }
 
         return;
       }
 
-      if (event === "toggleMute") {
+      if (event === webSocketService.clientEvents.toggleMute) {
         const { userToMuteName, isMuted } = parsedData;
 
         if (!user.admin) return;
 
-
         await UsersDBService.updateByName(userToMuteName, { muted: isMuted });
+                
+        UsersOnline.toggleMuteByName(userToMuteName, isMuted);
         
-        // Разделить обязанности - этот метод отвечает только за уведомление пользователя, а сейчас он еще и юзеров обновляет
         webSocketService.notifyMutedUser(userToMuteName);
 
-        // const onlineMutedUser = UsersOnline.getByName(userToMuteName);
-
-        // if (onlineMutedUser) {
-        //   onlineMutedUser.muted = isMuted;
-        //   onlineMutedUser.wsc.send(
-        //     JSON.stringify({ event: "muteToggled", isMuted })
-        //   );
-        // }
-
         webSocketService.sendOnlineUsers("admin");
+
         webSocketService.sendAllUsersToAdmin();
 
         return;
       }
 
-      if (event === "toggleBan") {
+      if (event === webSocketService.clientEvents.toggleBan) {
         const { userToBanName, isBanned } = parsedData;
 
         if (!user.admin) return;
 
-
         await UsersDBService.updateByName(userToBanName, { banned: isBanned });
+
         
         const onlineUser = UsersOnline.getByName(userToBanName);
+        
         if (isBanned && onlineUser) {
           onlineUser.wsc.close();
         }

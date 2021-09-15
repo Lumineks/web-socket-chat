@@ -22,10 +22,8 @@ class UsersOnline {
   }
 
   static removeById(id) {
-    console.log("Before: ", usersOnline);
     const userIdx = usersOnline.findIndex((u) => u.id === id);
     usersOnline.splice(userIdx, 1);
-    console.log("After: ", usersOnline);
   }
 
   static map() {
@@ -39,6 +37,12 @@ class UsersOnline {
     });
 
     return mappedUsers;
+  }
+
+  static toggleMuteByName(username, isMuted) {
+    const onlineUser = this.getByName(username);
+    
+    onlineUser.muted = isMuted;
   }
 }
 

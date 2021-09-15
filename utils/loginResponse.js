@@ -1,5 +1,4 @@
 module.exports = (dbUser, token) => {
-    console.log(dbUser);
   return {
     token: token,
     name: dbUser.username,
