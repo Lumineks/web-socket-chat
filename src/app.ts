@@ -1,9 +1,9 @@
 import http from 'http';
 import express from 'express';
-import { validateLoginData } from './middleware/validateLoginData';
 import bcrypt from 'bcrypt';
+import { validateLoginData } from './middleware/validateLoginData';
 const UsersDBService = require("./service/UsersDB");
-const UsersOnline = require("./service/UsersOnline");
+import { UsersOnline } from './service/UsersOnline';
 const chatController = require("./controllers/Chat");
 const createUserToken = require("./utils/createUserToken");
 

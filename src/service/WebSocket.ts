@@ -1,23 +1,27 @@
-const UsersOnline = require("./UsersOnline");
+import { UsersOnline } from "./UsersOnline";
+import WebSocket from "ws";
+import { message } from "../types/message";
 const UsersDBService = require("./UsersDB");
 
-class WebSocketService {
-  constructor(WSServer) {
+enum serverEvents {
+  message = "message",
+  usersOnline = "usersOnline",
+  allUsers = "allUsers",
+  muteToggled = "muteToggled",
+  msgDelay = "msgDelay",
+}
+
+export enum clientEvents {
+  message = "message",
+  toggleMute = "toggleMute",
+  toggleBan = "toggleBan",
+}
+
+export class WebSocketService {
+  WebSocketServer: WebSocket.Server;
+
+  constructor(WSServer: WebSocket.Server) {
     this.WebSocketServer = WSServer;
-
-    this.serverEvents = {
-      message: "message",
-      usersOnline: "usersOnline",
-      allUsers: "allUsers",
-      muteToggled: "muteToggled",
-      msgDelay: "msgDelay",
-    };
-
-    this.clientEvents = {
-      message: "message",
-      toggleMute: "toggleMute",
-      toggleBan: "toggleBan",
-    };
   }
 
   async sendAllUsersToAdmin() {
@@ -27,81 +31,77 @@ class WebSocketService {
       const usersToSend = await UsersDBService.mapAllUsers();
 
       onlineRootUser.wsc.send(
-        this.stringifyDataToSend(this.serverEvents.allUsers, usersToSend)
+        // this.stringifyDataToSend(this.serverEvents.allUsers, usersToSend)
+        this.stringifyDataToSend(serverEvents.allUsers, usersToSend)
       );
     }
   }
 
-  sendOnlineUsers(config) {
+  sendOnlineUsers(config: "all" | "admin") {
     const usersToSend = UsersOnline.map();
 
     if (config === "all") {
       const dataToSend = this.stringifyDataToSend(
-        this.serverEvents.usersOnline,
+        serverEvents.usersOnline,
         usersToSend
       );
 
       this.sendDataToAllUsers(dataToSend);
-
     } else if (config === "admin") {
-
       const onlineRootUser = UsersOnline.getRoot();
 
       if (onlineRootUser) {
         onlineRootUser.wsc.send(
-          this.stringifyDataToSend(this.serverEvents.usersOnline, usersToSend)
+          this.stringifyDataToSend(serverEvents.usersOnline, usersToSend)
         );
       }
-
     }
   }
 
-  sendMessage(message) {
+  sendMessage(message: message) {
     const dataToSend = this.stringifyDataToSend(
-      this.serverEvents.message,
+      serverEvents.message,
       message
     );
 
     this.sendDataToAllUsers(dataToSend);
   }
 
-  notifyMutedUser(username) {
+  notifyMutedUser(username: string) {
     const onlineMutedUser = UsersOnline.getByName(username);
 
     if (onlineMutedUser) {
-
       onlineMutedUser.wsc.send(
         this.stringifyDataToSend(
-          this.serverEvents.muteToggled,
+          serverEvents.muteToggled,
           onlineMutedUser.muted
         )
       );
-      
     }
   }
 
-  notifyMsgDelay(username) {
+  notifyMsgDelay(username: string) {
     const onlineUser = UsersOnline.getByName(username);
 
-    const dataToSend = this.stringifyDataToSend(this.serverEvents.msgDelay, {
+    const dataToSend = this.stringifyDataToSend(serverEvents.msgDelay, {
       text: "Вы можете отправлять сообщение 1 раз в 15 секунд",
     });
 
-    onlineUser.wsc.send(dataToSend);
+    if (onlineUser) {
+      onlineUser.wsc.send(dataToSend);
+    }
   }
 
   // Helpers
 
-  sendDataToAllUsers(dataToSend) {
+  sendDataToAllUsers(dataToSend: string) {
     this.WebSocketServer.clients.forEach((client) => client.send(dataToSend));
   }
 
-  stringifyDataToSend(event, data) {
+  stringifyDataToSend(event: serverEvents, data: any) {
     return JSON.stringify({
       event: event,
       data: data,
     });
   }
 }
-
-module.exports = WebSocketService;

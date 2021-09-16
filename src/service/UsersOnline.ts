@@ -1,6 +1,8 @@
-const usersOnline = [];
+import { userOnline } from "../types/userOnline";
 
-class UsersOnline {
+const usersOnline: userOnline[] = [];
+
+export class UsersOnline {
   static getAll() {
     return usersOnline;
   }
@@ -9,19 +11,19 @@ class UsersOnline {
     return usersOnline.find((u) => u.username === "root");
   }
 
-  static getByName(username) {
+  static getByName(username: string) {
     return usersOnline.find((u) => u.username === username);
   }
 
-  static includes(username) {
+  static includes(username: string) {
     return !!usersOnline.find((u) => u.username === username);
   }
 
-  static add(user) {
+  static add(user: userOnline) {
     usersOnline.push(user);
   }
 
-  static removeById(id) {
+  static removeById(id: number) {
     const userIdx = usersOnline.findIndex((u) => u.id === id);
     usersOnline.splice(userIdx, 1);
   }
@@ -39,11 +41,11 @@ class UsersOnline {
     return mappedUsers;
   }
 
-  static toggleMuteByName(username, isMuted) {
+  static toggleMuteByName(username: string, isMuted: boolean) {
     const onlineUser = this.getByName(username);
-    
-    onlineUser.muted = isMuted;
+
+    if(onlineUser) {
+      onlineUser.muted = isMuted;
+    }
   }
 }
-
-module.exports = UsersOnline;

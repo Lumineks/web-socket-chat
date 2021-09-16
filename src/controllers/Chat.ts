@@ -1,17 +1,25 @@
 const UsersDBService = require("../service/UsersDB");
-const WebSocket = require("ws");
-const WebSocketService = require("../service/WebSocket");
+import http from "http";
+import WebSocket from "ws";
+import { WebSocketService, clientEvents } from "../service/WebSocket";
+import { user } from "../types/user";
 const jwt = require("jsonwebtoken");
-const UsersOnline = require("../service/UsersOnline");
+import { UsersOnline } from "../service/UsersOnline";
 const Messages = require("../service/Messages");
+import {parse as parseUrl} from 'url';
+import {Url} from 'url';
 
-module.exports = (server) => {
+module.exports = (server: http.Server) => {
   const webSocketServer = new WebSocket.Server({ server });
   const webSocketService = new WebSocketService(webSocketServer);
 
-  webSocketServer.on("connection", async (ws, req) => {
-    const token = req.url.split("=")[1];
-    let user, decodedToken;
+  webSocketServer.on("connection", async (ws: WebSocket, req: http.IncomingMessage) => {
+    // const token = req.url.split("=")[1];
+    const token = new URL(req.url as string).searchParams.get('token');
+    console.log(token);
+    let user: any, decodedToken;
+
+    // return;
 
     try {
       decodedToken = jwt.verify(token, process.env.JWT_KEY);
@@ -32,8 +40,17 @@ module.exports = (server) => {
 
     console.log("connected");
 
-    ws.on("message", async (data) => {
-      let parsedData;
+    ws.on("message", async (data: string) => {
+      let parsedData: {
+        event: string,
+        text?: string,
+        date?: string,
+        color?: string,
+        isMuted?: string,
+        userToMuteName?: string,
+        isBanned?: string,
+        userToBanName?: string,
+      };
 
       try {
         parsedData = JSON.parse(data);
@@ -44,13 +61,22 @@ module.exports = (server) => {
 
       const { event } = parsedData;
 
-      if (event === webSocketService.clientEvents.message) {
-        const onlineUser = UsersOnline.getByName(user.username);
+      console.log("event", event);
 
-        if(onlineUser.muted) {
-          return
-        };
-       
+      if (event === clientEvents.message) {
+        const { text, date, color } = parsedData;
+        
+        if(!text || !date || !color) {
+          return;
+        }
+
+        const onlineUser = UsersOnline.getByName(user.username);
+        // Maybe just check user.muted? they're the same
+        // should check with console        
+        if (onlineUser!.muted) {
+          return;
+        }
+
         if (
           parsedData.text.trim().length === 0 ||
           parsedData.text.trim().length > 200
@@ -65,14 +91,11 @@ module.exports = (server) => {
           name: user.username,
         };
 
-        if(Messages.checkDelay(message.name, message.date)) {
-
+        if (Messages.checkDelay(message.name, message.date)) {
           Messages.add(message);
 
           webSocketService.sendMessage(message);
-          
-        }
-        else {
+        } else {
           webSocketService.notifyMsgDelay(user.username);
         }
 
@@ -85,9 +108,9 @@ module.exports = (server) => {
         if (!user.admin) return;
 
         await UsersDBService.updateByName(userToMuteName, { muted: isMuted });
-                
+
         UsersOnline.toggleMuteByName(userToMuteName, isMuted);
-        
+
         webSocketService.notifyMutedUser(userToMuteName);
 
         webSocketService.sendOnlineUsers("admin");
@@ -104,15 +127,14 @@ module.exports = (server) => {
 
         await UsersDBService.updateByName(userToBanName, { banned: isBanned });
 
-        
         const onlineUser = UsersOnline.getByName(userToBanName);
-        
+
         if (isBanned && onlineUser) {
           onlineUser.wsc.close();
 
           webSocketService.sendOnlineUsers("all");
         }
-        
+
         webSocketService.sendAllUsersToAdmin();
 
         return;
