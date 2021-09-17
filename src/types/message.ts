@@ -1,4 +1,4 @@
-export interface message {
+export type message = {
   text: string;
   date: string;
   color: string;

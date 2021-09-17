@@ -31,7 +31,6 @@ export class WebSocketService {
       const usersToSend = await UsersDBService.mapAllUsers();
 
       onlineRootUser.wsc.send(
-        // this.stringifyDataToSend(this.serverEvents.allUsers, usersToSend)
         this.stringifyDataToSend(serverEvents.allUsers, usersToSend)
       );
     }
@@ -92,13 +91,11 @@ export class WebSocketService {
     }
   }
 
-  // Helpers
-
-  sendDataToAllUsers(dataToSend: string) {
+  private sendDataToAllUsers(dataToSend: string) {
     this.WebSocketServer.clients.forEach((client) => client.send(dataToSend));
   }
 
-  stringifyDataToSend(event: serverEvents, data: any) {
+  private  stringifyDataToSend(event: serverEvents, data: any) {
     return JSON.stringify({
       event: event,
       data: data,
