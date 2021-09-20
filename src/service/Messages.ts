@@ -1,10 +1,10 @@
-import { message } from "../types/message";
+import message from "../types/message";
 
 const messages: message[] = [];
 
 const delay: number = 15;
 
-export class Messages {
+export default class Messages {
   static add(message: message): void {
     messages.push(message);
   }

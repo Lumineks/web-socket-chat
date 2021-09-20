@@ -1,9 +1,9 @@
 import express from "express";
-import { loginBody } from "../types/loginBody";
+import loginBody from "../types/loginBody";
 import isEmail from 'validator/lib/isEmail';
-import { validateSpecCharacter } from "../utils/validateSpecCharacter";
+import validateSpecCharacter from "../utils/validateSpecCharacter";
 
-export const validateLoginData = (
+const validateLoginData = (
   req: express.Request<{}, {}, loginBody>,
   res: express.Response,
   next: express.NextFunction
@@ -40,3 +40,5 @@ export const validateLoginData = (
 
   return next();
 };
+
+export default validateLoginData;

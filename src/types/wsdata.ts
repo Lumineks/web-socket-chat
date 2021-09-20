@@ -1,4 +1,4 @@
-export type wsdata = {
+type wsdata = {
   event: string;
   text?: string;
   date?: string;
@@ -8,3 +8,5 @@ export type wsdata = {
   userToMuteName?: string;
   userToBanName?: string;
 };
+
+export default wsdata;

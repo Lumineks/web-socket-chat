@@ -1,14 +1,14 @@
-const UsersDBService = require("../service/UsersDB");
+import UsersDBService from "../service/UsersDB";
 import http from "http";
 import WebSocket from "ws";
 import { WebSocketService, clientEvents } from "../service/WebSocket";
-import { user } from "../types/user";
-const jwt = require("jsonwebtoken");
+import * as jwt from "jsonwebtoken";
 import { URL } from "url";
-import { UsersOnline } from "../service/UsersOnline";
-import { Messages } from "../service/Messages";
-import { wsdata } from "../types/wsdata";
-import { message } from "../types/message";
+import UsersOnline from "../service/UsersOnline";
+import Messages from "../service/Messages";
+import wsdata from "../types/wsdata";
+import message from "../types/message";
+import User from "../models/user";
 
 module.exports = (server: http.Server) => {
   const webSocketServer = new WebSocket.Server({ server });
@@ -19,22 +19,29 @@ module.exports = (server: http.Server) => {
     async (ws: WebSocket, req: http.IncomingMessage) => {
       const url = new URL(req.url as string, `http://${req.headers.host}`);
       const token = url.searchParams.get("token");
-    
-      let user: any, decodedToken;
+
+      if (!token) {
+        return ws.close();
+      }
+
+      let user: User | null = null;
+      let decodedToken: { userId: number };
 
       try {
-        decodedToken = jwt.verify(token, process.env.JWT_KEY);
+        decodedToken = jwt.verify(token, process.env.JWT_KEY as string) as {
+          userId: number;
+        };
         user = await UsersDBService.findById(decodedToken.userId);
       } catch (err) {
         console.log(err);
         ws.send("invalid token");
       }
 
-      if (!token || !user) {
+      if (!user) {
         return ws.close();
       }
 
-      UsersOnline.add({ ...user.dataValues, wsc: ws });
+      UsersOnline.add({ ...user.get({ plain: true }), wsc: ws });
 
       webSocketService.sendOnlineUsers("all");
       webSocketService.sendAllUsersToAdmin();
@@ -42,6 +49,10 @@ module.exports = (server: http.Server) => {
       console.log("connected");
 
       ws.on("message", async (data: string) => {
+        if (!user) {
+          return ws.close();
+        }
+
         let parsedData: wsdata;
 
         try {
@@ -144,7 +155,7 @@ module.exports = (server: http.Server) => {
       });
 
       ws.on("close", () => {
-        UsersOnline.removeById(user.id);
+        UsersOnline.removeById(user!.id);
 
         webSocketService.sendOnlineUsers("all");
       });

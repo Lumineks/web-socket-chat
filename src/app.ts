@@ -5,11 +5,12 @@ import bcrypt from "bcrypt";
 import dotenv from 'dotenv';
 dotenv.config();
 
-import { validateLoginData } from "./middleware/validateLoginData";
-const UsersDBService = require("./service/UsersDB");
-import { UsersOnline } from "./service/UsersOnline";
+import validateLoginData from "./middleware/validateLoginData";
+import UsersDBService from "./service/UsersDB";
+import UsersOnline from "./service/UsersOnline";
 const chatController = require("./controllers/Chat");
-import { createUserToken } from "./utils/createUserToken";
+import createUserToken from "./utils/createUserToken";
+import User from "./models/user";
 
 const app = express();
 const server = http.createServer(app);
@@ -26,7 +27,7 @@ app.post("/login", validateLoginData, async (req, res) => {
     return res.status(403).send("Пользователь с таким именем уже в чате");
   }
 
-  let user = await UsersDBService.findByLoginData(email, username);
+  let user: User | null = await UsersDBService.findByLoginData(email, username);
 
   if (user) {
     if (user.banned) {
@@ -48,7 +49,7 @@ app.post("/login", validateLoginData, async (req, res) => {
     user = await UsersDBService.create(username, encryptedPassword, email);
   }
 
-  const token: string = createUserToken(user.id);
+  const token: string = createUserToken(user.id.toString());
 
   res.status(200).json({
     token: token,

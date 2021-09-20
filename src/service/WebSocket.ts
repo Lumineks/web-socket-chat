@@ -1,7 +1,7 @@
-import { UsersOnline } from "./UsersOnline";
+import UsersOnline from "./UsersOnline";
 import WebSocket from "ws";
-import { message } from "../types/message";
-const UsersDBService = require("./UsersDB");
+import message from "../types/message";
+import UsersDBService from "./UsersDB";
 
 enum serverEvents {
   message = "message",
@@ -24,11 +24,16 @@ export class WebSocketService {
     this.WebSocketServer = WSServer;
   }
 
-  async sendAllUsersToAdmin() {
+  async sendAllUsersToAdmin(): Promise<void> {
     const onlineRootUser = UsersOnline.getRoot();
 
     if (onlineRootUser) {
-      const usersToSend = await UsersDBService.mapAllUsers();
+      const usersToSend: {
+        name: string;
+        email: string;
+        isMuted: boolean;
+        isBanned: boolean;
+      }[] = await UsersDBService.mapAllUsers();
 
       onlineRootUser.wsc.send(
         this.stringifyDataToSend(serverEvents.allUsers, usersToSend)
@@ -58,10 +63,7 @@ export class WebSocketService {
   }
 
   sendMessage(message: message) {
-    const dataToSend = this.stringifyDataToSend(
-      serverEvents.message,
-      message
-    );
+    const dataToSend = this.stringifyDataToSend(serverEvents.message, message);
 
     this.sendDataToAllUsers(dataToSend);
   }
@@ -95,7 +97,7 @@ export class WebSocketService {
     this.WebSocketServer.clients.forEach((client) => client.send(dataToSend));
   }
 
-  private  stringifyDataToSend(event: serverEvents, data: any) {
+  private stringifyDataToSend(event: serverEvents, data: any) {
     return JSON.stringify({
       event: event,
       data: data,

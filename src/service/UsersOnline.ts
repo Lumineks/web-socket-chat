@@ -2,7 +2,7 @@ import { userOnline } from "../types/userOnline";
 
 const usersOnline: userOnline[] = [];
 
-export class UsersOnline {
+export default class UsersOnline {
   static getAll(): userOnline[] {
     return usersOnline;
   }
