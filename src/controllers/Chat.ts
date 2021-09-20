@@ -10,7 +10,7 @@ import wsdata from "../types/wsdata";
 import message from "../types/message";
 import User from "../models/user";
 
-module.exports = (server: http.Server) => {
+export default (server: http.Server) => {
   const webSocketServer = new WebSocket.Server({ server });
   const webSocketService = new WebSocketService(webSocketServer);
 

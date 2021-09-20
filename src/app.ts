@@ -8,7 +8,7 @@ dotenv.config();
 import validateLoginData from "./middleware/validateLoginData";
 import UsersDBService from "./service/UsersDB";
 import UsersOnline from "./service/UsersOnline";
-const chatController = require("./controllers/Chat");
+import chatController from "./controllers/Chat";
 import createUserToken from "./utils/createUserToken";
 import User from "./models/user";
 
